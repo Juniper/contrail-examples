@@ -1,0 +1,75 @@
+heat_template_version: 2015-04-30
+
+description: HOT to update Security-Groups on the fly
+
+parameters:
+  network_name:
+    type: string
+    description: Name of network to be created
+
+  subnet_prefix:
+    type: string
+    description: Subnet prefix
+
+  subnet_prefix_len:
+    type: string
+    description: Subnet prefix len
+
+  server_name:
+    type: string
+    description: Name of the server    
+
+  server_count:
+    type: number
+    description: Number of servers
+
+  image_name:
+    type: string
+    description: Name of the image
+
+  flavor_type:
+    type: string
+    description: Type of flavor
+
+  security_group_name:
+    type: string
+    description: Name of the Security-Group
+
+resources:
+  template_NetworkIpam:
+    type: OS::ContrailV2::NetworkIpam
+    properties:
+      name: { get_param: network_name }
+
+  template_VirtualNetwork:
+    type: OS::ContrailV2::VirtualNetwork
+    depends_on: [ template_NetworkIpam ]
+    properties:
+      name: { get_param: network_name }
+      network_ipam_refs: [{ get_resource: template_NetworkIpam }]
+      network_ipam_refs_data:
+        [{
+          network_ipam_refs_data_ipam_subnets:
+            [{
+              network_ipam_refs_data_ipam_subnets_subnet:
+                {
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix: { get_param: subnet_prefix },
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix_len: { get_param: subnet_prefix_len },
+                },
+            }]
+         }]
+
+  instance_group:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      max_size: { get_param: server_count }
+      min_size: { get_param: server_count }
+      resource:
+        type: server_launch_os.yaml
+        properties:
+          server_name: { get_param: server_name }
+          image_name: { get_param: image_name }
+          flavor_type: { get_param: flavor_type }
+          network_name: { get_param: network_name }
+          network_fqdn: { list_join: [':', { get_attr: [ template_VirtualNetwork, fq_name ] } ] }
+          security_group_name: { get_param: security_group_name }

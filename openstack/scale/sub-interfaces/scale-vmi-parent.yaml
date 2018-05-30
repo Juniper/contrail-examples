@@ -1,0 +1,124 @@
+# Author: SAVITHRU LOKANATH
+# Contact: SAVITHRU AT JUNIPER.NET
+# Copyright (c) 2017 Juniper Networks, Inc. All rights reserved.
+
+heat_template_version: 2015-04-30
+
+description: >
+  HOT to test scaling of VMI sub interfaces
+
+parameters:
+
+  vn_name:
+    type: string
+    description: Name of network to be created
+
+  subnet_prefix:
+    type: string
+    description: Prefix of the network subnet
+
+  subnet_prefix_len:
+    type: string
+    description: Prefix length of the network subnet
+
+  parent_port_name:
+    type: string
+    description: Name of the parent port
+
+  parent_instance_ip_name:
+    type: string
+    description: Name of the parent port's instance IP
+
+  qos_name:
+    type: string
+    description: Name of the QoS config
+
+  vmi_count:
+    type: number
+    description: Number of VMIs to be created
+
+  mirror_traffic_direction:
+    type: string
+    constraints:
+      - allowed_values:
+        - ingress
+        - egress
+        - both
+    description: Direction of traffic to be mirrored
+
+  server_traffic_analyzer_name:
+    type: string
+    description: Name of the analyzer VM
+
+  analyzer_instance_ip:
+    type: string
+    description: Analyzer VMs interface IP
+
+  server_traffic_analyzer_udp_port:
+    type: number
+    constraints:
+      - range: { min: 1030, max: 65000 }
+    description: UDP port to which mirrored traffic is sent
+
+resources:
+
+  template_NetworkIpam:
+    type: OS::ContrailV2::NetworkIpam
+    properties:
+      name: { get_param: vn_name }
+
+  template_VirtualNetwork:
+    type: OS::ContrailV2::VirtualNetwork
+    depends_on: [ template_NetworkIpam ]
+    properties:
+      name: { get_param: vn_name }
+      network_ipam_refs: [{ get_resource: template_NetworkIpam }]
+      network_ipam_refs_data:
+        [{
+          network_ipam_refs_data_ipam_subnets:
+            [{
+              network_ipam_refs_data_ipam_subnets_subnet:
+                {
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix: { get_param: subnet_prefix },
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix_len: { get_param: subnet_prefix_len },
+                },
+            }]
+         }]
+
+  template_VirtualMachineInterface:
+    type: OS::ContrailV2::VirtualMachineInterface
+    properties:
+      name: { get_param: parent_port_name }
+      virtual_network_refs: [{ get_resource: template_VirtualNetwork }]
+
+  template_InstanceIp:
+    type: OS::ContrailV2::InstanceIp
+    depends_on: [ template_VirtualMachineInterface ]
+    properties:
+      name: { get_param: parent_instance_ip_name }
+      virtual_machine_interface_refs: [{ get_resource: template_VirtualMachineInterface }]
+      virtual_network_refs: [{ get_resource: template_VirtualNetwork }]  
+
+  template_QoSConfig:
+    type: OS::ContrailV2::QosConfig
+    properties:
+      name: { get_param: qos_name }  
+
+  template_instance_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: vmi_count }
+      removal_policies: [{'resource_list': ['0']}]
+      resource_def:
+        type: scale-vmi-child.yaml
+        properties:
+          vmi_name:
+            list_join: ['-',[ { get_param: vn_name }, '%index%' ]]
+          vn_fqdn: { list_join: [':', { get_attr: [ template_VirtualNetwork, fq_name ] } ] }
+          parent_port: { get_resource: template_VirtualMachineInterface }
+          qos_config: { get_resource: template_QoSConfig }
+          vlan_tag: '%index%'
+          mirror_traffic_direction: { get_param: mirror_traffic_direction }
+          server_traffic_analyzer_name: { get_param: server_traffic_analyzer_name }
+          analyzer_instance_ip: { get_param: analyzer_instance_ip }
+          server_traffic_analyzer_udp_port: { get_param: server_traffic_analyzer_udp_port }

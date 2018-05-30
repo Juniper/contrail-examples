@@ -1,0 +1,258 @@
+# TWO TIER APPLICATION
+
+# Author: SAVITHRU LOKANATH
+# Contact: SAVITHRU AT JUNIPER.NET
+# Copyright (c) 2017 Juniper Networks, Inc. All rights reserved
+
+
+heat_template_version: 2015-10-15
+
+description: >
+  Heat template to create a two-tier web application
+
+parameters:
+  web_virtual_network_name:
+    type: string
+    description: Name of the web virtual network
+
+  web_virtual_network_fqname:
+    type: string
+    description: FQDN of web virtual network
+
+  web_virtual_network_subnet_prefix:
+    type: string
+    description: Prefix of the web virtual network
+
+  web_virtual_network_subnet_prefix_len:
+    type: string
+    description: Prefix length of the web virtual network
+
+  web_virtual_network_subnet_default_gw:
+    type: string
+    description: Default gateway of the web virtual network
+
+  web_server_name:
+    type: string
+    description: Name of the web server virtual machine
+
+  db_virtual_network_name:
+    type: string
+    description: Name of the database virtual network
+
+  db_virtual_network_fqname:
+    type: string
+    description: FQDN of database virtual network
+
+  db_virtual_network_subnet_prefix:
+    type: string
+    description: Prefix of the database virtual network
+
+  db_virtual_network_subnet_prefix_len:
+    type: string
+    description: Prefix length of the database virtual network
+
+  db_virtual_network_subnet_default_gw:
+    type: string
+    description: Default gateway of the database virtual network
+
+  db_server_name:
+    type: string
+    description: Name of the database server virtual machine
+
+  network_policy_name:
+    type: string
+    description: Name of the network policy
+
+  network_policy_direction:
+    type: string
+    description: Direction of network traffic
+
+  network_policy_protocol:
+    type: string
+    description: Protocol allowed to pass or deny
+
+  network_policy_action:
+    type: string
+    description: Action to pass or deny traffic between virtual networks
+
+  floating_ip_pool_name:
+    type: string
+    description: Name of the floating IP pool
+
+  image_name:
+    type: string
+    description: Image name
+
+  flavor_type:
+    type: string
+    description: Flavor type
+
+
+resources:
+
+  template_WebNetworkIpam:
+    type: OS::ContrailV2::NetworkIpam
+    properties:
+      name: { get_param: web_virtual_network_name }
+
+  template_DbNetworkIpam:
+    type: OS::ContrailV2::NetworkIpam
+    properties:
+      name: { get_param: db_virtual_network_name }
+
+  template_WebVirtualNetwork:
+    type: OS::ContrailV2::VirtualNetwork
+    depends_on: [ template_WebNetworkIpam, template_NetworkPolicy ]
+    properties:
+      name: { get_param: web_virtual_network_name }
+      network_ipam_refs: [{ get_resource: template_WebNetworkIpam }]
+      network_ipam_refs_data:
+        [{
+          network_ipam_refs_data_ipam_subnets:
+            [{
+              network_ipam_refs_data_ipam_subnets_subnet:
+                {
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix: { get_param: web_virtual_network_subnet_prefix },
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix_len: { get_param: web_virtual_network_subnet_prefix_len },
+                },
+               network_ipam_refs_data_ipam_subnets_addr_from_start: True,
+               network_ipam_refs_data_ipam_subnets_default_gateway: { get_param: web_virtual_network_subnet_default_gw },
+            }]
+         }]
+      network_policy_refs: [{ list_join: [':', { get_attr: [ template_NetworkPolicy, fq_name ] } ] }]
+      network_policy_refs_data:
+        [{
+          network_policy_refs_data_sequence:
+            {
+             network_policy_refs_data_sequence_major: 0,
+             network_policy_refs_data_sequence_minor: 0,
+            },
+        }]
+
+  template_DbVirtualNetwork:
+    type: OS::ContrailV2::VirtualNetwork
+    depends_on: [ template_DbNetworkIpam, template_NetworkPolicy ]
+    properties:
+      name: { get_param: db_virtual_network_name }
+      network_ipam_refs: [{ get_resource: template_DbNetworkIpam }]
+      network_ipam_refs_data:
+        [{
+          network_ipam_refs_data_ipam_subnets:
+            [{
+              network_ipam_refs_data_ipam_subnets_subnet:
+                {
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix: { get_param: db_virtual_network_subnet_prefix },
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix_len: { get_param: db_virtual_network_subnet_prefix_len },
+                },
+              network_ipam_refs_data_ipam_subnets_addr_from_start: True,
+              network_ipam_refs_data_ipam_subnets_default_gateway: { get_param: db_virtual_network_subnet_default_gw },
+            }]
+         }]
+      network_policy_refs: [{ list_join: [':', { get_attr: [ template_NetworkPolicy, fq_name ] } ] }]
+      network_policy_refs_data:
+        [{
+          network_policy_refs_data_sequence:
+             {
+              network_policy_refs_data_sequence_major: 0,
+              network_policy_refs_data_sequence_minor: 0,
+             },
+        }]
+
+  template_NetworkPolicy:
+    type: OS::ContrailV2::NetworkPolicy
+    properties:
+      name: { get_param: network_policy_name }
+      network_policy_entries:
+        network_policy_entries_policy_rule:
+           [{
+            network_policy_entries_policy_rule_direction: { get_param: network_policy_direction },
+            network_policy_entries_policy_rule_protocol: { get_param: network_policy_protocol },
+            network_policy_entries_policy_rule_dst_addresses:
+              [{
+                network_policy_entries_policy_rule_dst_addresses_virtual_network: { get_param: db_virtual_network_fqname }
+              }],
+            network_policy_entries_policy_rule_src_addresses:
+              [{
+                network_policy_entries_policy_rule_src_addresses_virtual_network: { get_param: web_virtual_network_fqname }
+              }],
+            network_policy_entries_policy_rule_src_ports:
+              [{
+                network_policy_entries_policy_rule_src_ports_start_port: "-1",
+                network_policy_entries_policy_rule_src_ports_end_port: "-1"
+              }],
+            network_policy_entries_policy_rule_dst_ports:
+              [{
+                network_policy_entries_policy_rule_dst_ports_start_port: "-1",
+                network_policy_entries_policy_rule_dst_ports_end_port: "-1"
+              }],
+            network_policy_entries_policy_rule_action_list:
+               {
+                network_policy_entries_policy_rule_action_list_simple_action: { get_param: network_policy_action }
+               }
+           }]
+
+  template_DbInstance:
+    type: OS::Nova::Server
+    depends_on: [ template_DbVirtualNetwork ]
+    properties:
+      name: { get_param: db_server_name }
+      image: { get_param: image_name }
+      flavor: { get_param: flavor_type }
+      networks:
+        - network: { get_resource: template_DbVirtualNetwork }
+      user_data:
+        get_resource: template_DbInit
+      user_data_format: RAW
+
+  template_WebInstance:
+    type: OS::Nova::Server
+    depends_on: [ template_WebVirtualNetwork, template_DbInstance ]
+    properties:
+      name: { get_param: web_server_name }
+      image: { get_param: image_name }
+      flavor: { get_param: flavor_type }
+      networks:
+        - network: { get_resource: template_WebVirtualNetwork }
+      user_data:
+        get_resource: template_WebInit
+      user_data_format: RAW
+
+  template_DbInit:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: { get_file: cloud-init/db.sh }
+          params:
+            $db_hostname: { get_param: db_server_name }
+
+  template_WebInit:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: { get_file: cloud-init/web.sh }
+          params:
+            $web_hostname: { get_param: web_server_name }
+            $db_ipaddr: { get_attr: [ template_DbInstance, networks, { get_param: db_virtual_network_fqname }, 0]}
+
+  template_FloatingIP:
+    type: OS::Nova::FloatingIP
+    properties:
+      pool: { get_param: floating_ip_pool_name }
+
+  template_FIPAssociation:
+    type: OS::Nova::FloatingIPAssociation
+    depends_on: [ template_FloatingIP ]
+    properties:
+      floating_ip: { get_resource: template_FloatingIP }
+      server_id: { get_resource: template_WebInstance }
+
+outputs:
+  web_instance_ip:
+    description: IP of web server
+    value: { get_attr: [ template_WebInstance, networks, { str_split: [':', { list_join: [':', { get_attr: [ template_WebVirtualNetwork, fq_name ] } ] }, 2] }, 0 ] }
+
+  db_instance_ip:
+    description: IP of database server
+    value: { get_attr: [ template_DbInstance, networks, { str_split: [':', { list_join: [':', { get_attr: [ template_DbVirtualNetwork, fq_name ] } ]  }, 2] }, 0 ] }

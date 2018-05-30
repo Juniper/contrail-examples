@@ -1,0 +1,48 @@
+heat_template_version: 2015-04-30
+
+description: >
+  HOT to create a BgpAsAService
+
+parameters:
+
+  vmi_name:
+    type: string
+    description: Name of the VMI/BGPaaS object to be created
+
+  vn_fqdn:
+    type: string
+    description: FQDN of the VN
+
+  autonomous_system:
+    type: number
+    description: Autonomous System number to be used for BGPaaS
+
+resources:
+
+  template_VirtualMachineInterface:
+    type: OS::ContrailV2::VirtualMachineInterface
+    properties:
+      name: { get_param: vmi_name }
+      virtual_network_refs: [{ get_param: vn_fqdn }]
+
+  template_InstanceIp:
+    type: OS::ContrailV2::InstanceIp
+    depends_on: [ template_VirtualMachineInterface ]
+    properties:
+      name: { get_param: vmi_name }
+      virtual_machine_interface_refs: [{ get_resource: template_VirtualMachineInterface }]
+      virtual_network_refs: [{ get_param: vn_fqdn }]
+
+  template_bgpaas_group:
+    type: OS::ContrailV2::BgpAsAService
+    properties:
+      name: { get_param: vmi_name }
+      autonomous_system: { get_param: autonomous_system }
+      virtual_machine_interface_refs: [{ get_resource: template_VirtualMachineInterface }]
+      bgpaas_session_attributes:
+        {
+          bgpaas_session_attributes_address_families:
+            {
+              bgpaas_session_attributes_address_families_family: ['inet','inet6'],
+            },
+        }

@@ -1,0 +1,70 @@
+# Author: SAVITHRU LOKANATH
+# Contact: SAVITHRU AT JUNIPER.NET
+# Copyright (c) 2017 Juniper Networks, Inc. All rights reserved.
+
+heat_template_version: 2015-04-30
+
+description: >
+  HOT to test scaling of VMI sub interfaces
+
+parameters:
+
+  vmi_name:
+    type: string
+    description: Name of the VMI/BGPaaS object to be created
+
+  vn_fqdn:
+    type: string
+    description: FQDN of the VN
+
+  parent_port:
+    type: string
+    description: Parent VMI
+
+  qos_config:
+    type: string
+    description: QoS config
+
+  vlan_tag:
+    type: number
+    description: VLAN tag to be assigned
+
+  mirror_traffic_direction:
+    type: string
+    description: Direction of traffic to be mirrored
+
+  server_traffic_analyzer_name:
+    type: string
+    description: Name of the analyzer VM
+
+  analyzer_instance_ip:
+    type: string
+    description: Analyzer VMs interface IP
+
+  server_traffic_analyzer_udp_port:
+    type: number
+    description: UDP port to which mirrored traffic is sent  
+
+resources:
+
+  template_VirtualMachineInterface:
+    type: OS::ContrailV2::VirtualMachineInterface
+    properties:
+      name: { get_param: vmi_name }
+      virtual_network_refs: [{ get_param: vn_fqdn }]
+      virtual_machine_interface_refs: [{ get_param: parent_port }]
+      qos_config_refs: [{ get_param: qos_config }]
+      virtual_machine_interface_properties:
+        {
+          virtual_machine_interface_properties_sub_interface_vlan_tag: { get_param: vlan_tag },
+          virtual_machine_interface_properties_interface_mirror:
+            {
+              virtual_machine_interface_properties_interface_mirror_traffic_direction: { get_param: mirror_traffic_direction },
+              virtual_machine_interface_properties_interface_mirror_mirror_to:
+                {
+                  virtual_machine_interface_properties_interface_mirror_mirror_to_analyzer_name: { get_param: server_traffic_analyzer_name },
+                  virtual_machine_interface_properties_interface_mirror_mirror_to_analyzer_ip_address: { get_param: analyzer_instance_ip },
+                  virtual_machine_interface_properties_interface_mirror_mirror_to_udp_port: { get_param: server_traffic_analyzer_udp_port },
+                },
+            },
+        } 

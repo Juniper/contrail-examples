@@ -1,0 +1,77 @@
+heat_template_version: 2015-04-30
+
+description: HOT to update Security-Groups on the fly
+
+parameters:
+
+  network_name:
+    type: string
+    description: Name of network to be created
+
+  subnet_prefix:
+    type: string
+    description: Prefix of the network subnet
+
+  subnet_prefix_len:
+    type: string
+    description: Prefix length of the network subnet
+
+  server_name:
+    type: string
+    description: Name of the server    
+
+  server_count:
+    type: number
+    description: Number of servers to be created
+
+  image_name:
+    type: string
+    description: Name of the image
+
+  flavor_type:
+    type: string
+    description: Flavor type of server
+
+  security_group_name:
+    type: string
+    description: Name of the security group
+
+resources:
+
+  template_NetworkIpam:
+    type: OS::ContrailV2::NetworkIpam
+    properties:
+      name: { get_param: network_name }
+
+  template_VirtualNetwork:
+    type: OS::ContrailV2::VirtualNetwork
+    depends_on: [ template_NetworkIpam ]
+    properties:
+      name: { get_param: network_name }
+      network_ipam_refs: [{ get_resource: template_NetworkIpam }]
+      network_ipam_refs_data:
+        [{
+          network_ipam_refs_data_ipam_subnets:
+            [{
+              network_ipam_refs_data_ipam_subnets_subnet:
+                {
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix: { get_param: subnet_prefix },
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix_len: { get_param: subnet_prefix_len },
+                },
+            }]
+         }]
+
+  template_instance_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: server_count }
+      resource_def:
+        type: server_launch.yaml
+        properties:
+          server_name:
+            list_join: ['-',[ { get_param: server_name }, '%index%' ]]
+          image_name: { get_param: image_name }
+          flavor_type: { get_param: flavor_type }
+          network_name: { get_param: network_name }
+          network_fqdn: { list_join: [':', { get_attr: [ template_VirtualNetwork, fq_name ] } ] }
+          security_group_name: { get_param: security_group_name }

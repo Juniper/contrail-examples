@@ -1,0 +1,58 @@
+heat_template_version: 2015-04-30
+
+description: >
+  HOT to create a BgpAsAService
+
+parameters:
+
+  vn_name:
+    type: string
+    description: Name of network to be created
+
+  subnet_prefix:
+    type: string
+    description: Prefix of the network subnet
+
+  subnet_prefix_len:
+    type: string
+    description: Prefix length of the network subnet
+
+  vmi_count:
+    type: number
+    description: Number of VMIs to be created
+
+resources:
+
+  template_NetworkIpam:
+    type: OS::ContrailV2::NetworkIpam
+    properties:
+      name: { get_param: vn_name }
+
+  template_VirtualNetwork:
+    type: OS::ContrailV2::VirtualNetwork
+    depends_on: [ template_NetworkIpam ]
+    properties:
+      name: { get_param: vn_name }
+      network_ipam_refs: [{ get_resource: template_NetworkIpam }]
+      network_ipam_refs_data:
+        [{
+          network_ipam_refs_data_ipam_subnets:
+            [{
+              network_ipam_refs_data_ipam_subnets_subnet:
+                {
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix: { get_param: subnet_prefix },
+                  network_ipam_refs_data_ipam_subnets_subnet_ip_prefix_len: { get_param: subnet_prefix_len },
+                },
+            }]
+         }]
+
+  template_instance_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: vmi_count }
+      resource_def:
+        type: scale-vmi.yaml
+        properties:
+          vmi_name:
+            list_join: ['-',[ { get_param: vn_name }, '%index%' ]]
+          vn_fqdn: { list_join: [':', { get_attr: [ template_VirtualNetwork, fq_name ] } ] }

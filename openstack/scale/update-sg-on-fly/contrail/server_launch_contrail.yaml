@@ -1,0 +1,56 @@
+heat_template_version: 2015-04-30
+
+description: HOT to spin Nova instances
+
+parameters:
+
+  network_name:
+    type: string
+    description: Name of the network
+
+  network_fqdn:
+    type: string
+    description: FQDN of the network
+
+  server_name:
+    type: string
+    description: Name of the server
+
+  image_name:
+    type: string
+    description: Name of the image
+
+  flavor_type:
+    type: string
+    description: Flavor type of server
+
+  security_group_name:
+    type: string
+    description: Name of the security group
+    
+resources:
+
+  template_VirtualMachineInterface:
+    type: OS::ContrailV2::VirtualMachineInterface
+    properties:
+      name: { get_param: network_name }
+      virtual_network_refs: [{ get_param: network_fqdn }]
+      security_group_refs: [{ get_param: security_group_name }]
+
+  template_InstanceIp:
+    type: OS::ContrailV2::InstanceIp
+    depends_on: [ template_VirtualMachineInterface ]
+    properties:
+      name: { get_param: network_name }
+      virtual_machine_interface_refs: [{ get_resource: template_VirtualMachineInterface }]
+      virtual_network_refs: [{ get_param: network_fqdn }]
+
+  template_instance:
+    type: OS::Nova::Server
+    depends_on: [ template_InstanceIp ]
+    properties:
+      name: { get_param: server_name }
+      image: { get_param:  image_name }
+      flavor: { get_param: flavor_type }
+      networks:
+        - port: { get_resource: template_VirtualMachineInterface }

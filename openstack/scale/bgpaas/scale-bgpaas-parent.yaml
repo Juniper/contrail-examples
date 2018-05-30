@@ -1,0 +1,47 @@
+heat_template_version: 2015-04-30
+
+description: >
+  HOT to create a BgpAsAService
+
+parameters:
+
+  vn_name:
+    type: string
+    description: Name of network to be created
+
+  vn_count:
+    type: string
+    description: Number of VNs to be created
+
+  subnet_prefix:
+    type: string
+    description: Prefix of the network subnet
+
+  subnet_prefix_len:
+    type: string
+    description: Prefix length of the network subnet
+
+  vmi_count:
+    type: number
+    description: Number of VMIs to be created
+
+  autonomous_system:
+    type: number
+    description: AS for BGPaaS
+
+resources:
+
+  template_instance_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: vn_count }
+      resource_def:
+        type: scale-bgpaas-vn.yaml
+        properties:
+          vn_name:
+            list_join: ['-',[ { get_param: vn_name }, '%index%' ]]
+          subnet_prefix:
+            list_join: ['.',[ { get_param: subnet_prefix }, '%index%', '0' ]]
+          subnet_prefix_len: { get_param: subnet_prefix_len }
+          vmi_count: { get_param: vmi_count }
+          autonomous_system: { get_param: autonomous_system }
